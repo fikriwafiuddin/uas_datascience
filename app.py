@@ -319,13 +319,15 @@ def custom_regression():
 
     # Get model stats from session if available
     if not model_stats and 'model_coef' in session:
+        x_columns = session.get('x_columns', [])
+        model_coef = session.get('model_coef', [])
         model_stats = {
             'r_squared': 0,  # Not stored in session
             'n_samples': 0,
             'n_features': session.get('n_features', 0),
-            'coef_dict': {},
+            'coef_dict': dict(zip(x_columns, model_coef)) if x_columns and model_coef else {},
             'intercept': session.get('model_intercept', 0),
-            'x_columns': session.get('x_columns', []),
+            'x_columns': x_columns,
             'y_column': session.get('y_column', 'Y')
         }
 
