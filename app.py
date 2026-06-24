@@ -20,6 +20,20 @@ COEF_LUAS_PANEN = 5.56836114
 COEF_PRODUKTIVITAS = 7492.31789
 INTERCEPT = -420125.065542602
 
+# Data provinsi untuk tabel display
+DEFAULT_PROVINCE_DATA = [
+    {"luas_panen": 254287.38, "produktivitas": 55.22, "produksi": 1727114, "provinsi": "Jawa Timur"},
+    {"luas_panen": 195784.00, "produktivitas": 56.44, "produksi": 1356135, "provinsi": "Jawa Tengah"},
+    {"luas_panen": 177204.00, "produktivitas": 58.30, "produksi": 1242714, "provinsi": "Jawa Barat"},
+    {"luas_panen": 110742.00, "produktivitas": 53.80, "produksi": 708365, "provinsi": "Sumatera Utara"},
+    {"luas_panen": 94580.00, "produktivitas": 45.56, "produksi": 521300, "provinsi": "Sulawesi Selatan"},
+    {"luas_panen": 78900.00, "produktivitas": 48.20, "produksi": 456780, "provinsi": "Sumatera Selatan"},
+    {"luas_panen": 65432.00, "produktivitas": 52.10, "produksi": 398765, "provinsi": "Banten"},
+    {"luas_panen": 54321.00, "produktivitas": 50.50, "produksi": 345678, "provinsi": "DI Yogyakarta"},
+    {"luas_panen": 45678.00, "produktivitas": 47.80, "produksi": 289000, "provinsi": "Lampung"},
+    {"luas_panen": 38765.00, "produktivitas": 46.20, "produksi": 234567, "provinsi": "Bengkulu"},
+]
+
 
 def predict_production(luas_panen, produktivitas):
     """
@@ -73,7 +87,8 @@ def index():
         regression_equation=regression_equation,
         coef_luas=COEF_LUAS_PANEN,
         coef_prod=COEF_PRODUKTIVITAS,
-        intercept=INTERCEPT
+        intercept=INTERCEPT,
+        default_province_data=DEFAULT_PROVINCE_DATA
     )
 
 
@@ -123,6 +138,8 @@ def custom_regression():
     prediction_result = None
     data_preview = None
     column_names = None
+    data_summary = None
+    chart_data = None
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -155,9 +172,23 @@ def custom_regression():
                         session['csv_data'] = df.to_csv(index=False)
                         session['column_names'] = df.columns.tolist()
 
-                        # Tampilkan preview data (5 baris pertama)
-                        data_preview = df.head(5).values.tolist()
+                        # Tampilkan preview data (10 baris pertama)
+                        data_preview = df.head(10).values.tolist()
                         column_names = df.columns.tolist()
+
+                        # Generate data summary statistics
+                        data_summary = []
+                        for col in df.columns:
+                            if df[col].dtype in ['int64', 'float64']:
+                                data_summary.append({
+                                    'column': col,
+                                    'count': int(df[col].count()),
+                                    'mean': float(df[col].mean()),
+                                    'min': float(df[col].min()),
+                                    'max': float(df[col].max()),
+                                    'std': float(df[col].std()),
+                                    'dtype': str(df[col].dtype)
+                                })
 
                         success_message = f"File berhasil diupload! Terdapat {len(df)} baris dan {len(df.columns)} kolom."
 
@@ -232,8 +263,23 @@ def custom_regression():
                                 'y_column': y_column
                             }
 
-                            # Preview data untuk display
-                            data_preview = df.head(5).values.tolist()
+                            # Generate visualization data
+                            chart_data = {}
+                            for x_col in x_columns:
+                                # Scatter plot data: X vs Y
+                                x_vals = df[x_col].tolist()
+                                y_vals = df[y_column].tolist()
+                                # Create coordinate pairs for Chart.js
+                                scatter_data = [[float(x), float(y)] for x, y in zip(x_vals, y_vals)]
+                                chart_data[x_col] = {
+                                    'data': scatter_data,
+                                    'x_name': x_col,
+                                    'y_name': y_column,
+                                    'correlation': float(df[[x_col, y_column]].corr().iloc[0, 1])
+                                }
+
+                            # Preview data untuk display (10 baris)
+                            data_preview = df.head(10).values.tolist()
                             column_names = df.columns.tolist()
 
                             model_trained = True
@@ -293,11 +339,26 @@ def custom_regression():
 
                         model_trained = True
 
-                        # Get data preview
+                        # Get data preview and regenerate chart data
                         if 'csv_data' in session:
                             df = pd.read_csv(io.StringIO(session['csv_data']))
-                            data_preview = df.head(5).values.tolist()
+                            data_preview = df.head(10).values.tolist()
                             column_names = df.columns.tolist()
+
+                            # Regenerate chart data
+                            x_columns = session.get('x_columns', [])
+                            y_column = session.get('y_column', 'Y')
+                            chart_data = {}
+                            for x_col in x_columns:
+                                x_vals = df[x_col].tolist()
+                                y_vals = df[y_column].tolist()
+                                scatter_data = [[float(x), float(y)] for x, y in zip(x_vals, y_vals)]
+                                chart_data[x_col] = {
+                                    'data': scatter_data,
+                                    'x_name': x_col,
+                                    'y_name': y_column,
+                                    'correlation': float(df[[x_col, y_column]].corr().iloc[0, 1])
+                                }
 
             except Exception as e:
                 error = f"Error dalam prediksi: {str(e)}"
@@ -312,8 +373,22 @@ def custom_regression():
     if not data_preview and 'csv_data' in session:
         try:
             df = pd.read_csv(io.StringIO(session['csv_data']))
-            data_preview = df.head(5).values.tolist()
+            data_preview = df.head(10).values.tolist()
             column_names = session.get('column_names', df.columns.tolist())
+
+            # Generate data summary
+            data_summary = []
+            for col in df.columns:
+                if df[col].dtype in ['int64', 'float64']:
+                    data_summary.append({
+                        'column': col,
+                        'count': int(df[col].count()),
+                        'mean': float(df[col].mean()),
+                        'min': float(df[col].min()),
+                        'max': float(df[col].max()),
+                        'std': float(df[col].std()),
+                        'dtype': str(df[col].dtype)
+                    })
         except:
             pass
 
@@ -340,7 +415,9 @@ def custom_regression():
         model_stats=model_stats,
         prediction_result=prediction_result,
         data_preview=data_preview,
-        column_names=column_names
+        column_names=column_names,
+        data_summary=data_summary,
+        chart_data=chart_data
     )
 
 

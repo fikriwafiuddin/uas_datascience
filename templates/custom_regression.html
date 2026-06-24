@@ -426,7 +426,105 @@
         .hidden {
             display: none;
         }
+
+        /* Data Summary Table */
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .summary-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .summary-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        /* Chart Container */
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .chart-box {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-box h4 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .chart-canvas {
+            position: relative;
+            height: 300px;
+        }
+
+        .correlation-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .correlation-high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .correlation-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .correlation-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Scrollable Data Preview */
+        .data-preview-container {
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+        }
+
+        .data-preview-container table {
+            margin: 0;
+        }
+
+        .row-count-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -491,11 +589,49 @@
 
             {% if data_preview and column_names %}
             <div class="file-info">
-                <p>📌 File berhasil diparse! Terdapat <strong>{{ data_preview|length }} baris preview</strong> dan <strong>{{ column_names|length }} kolom</strong>.</p>
+                <p>📌 File berhasil diparse! Terdapat <strong>{{ column_names|length }} kolom</strong>.</p>
             </div>
 
-            <h4 style="color: #555; margin-bottom: 15px;">Preview Data (5 baris pertama):</h4>
-            <div style="overflow-x: auto;">
+            <!-- Data Summary Statistics -->
+            {% if data_summary %}
+            <div style="margin: 20px 0;">
+                <h4 style="color: #555; margin-bottom: 15px;">📊 Statistik Deskriptif Data:</h4>
+                <div style="overflow-x: auto;">
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Kolom</th>
+                                <th>Count</th>
+                                <th>Mean</th>
+                                <th>Min</th>
+                                <th>Max</th>
+                                <th>Std Dev</th>
+                                <th>Tipe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in data_summary %}
+                            <tr>
+                                <td><strong>{{ stat.column }}</strong></td>
+                                <td>{{ stat.count }}</td>
+                                <td>{{ "{:.2f}".format(stat.mean) if stat.mean else '-' }}</td>
+                                <td>{{ "{:.2f}".format(stat.min) if stat.min else '-' }}</td>
+                                <td>{{ "{:.2f}".format(stat.max) if stat.max else '-' }}</td>
+                                <td>{{ "{:.2f}".format(stat.std) if stat.std else '-' }}</td>
+                                <td>{{ stat.dtype }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Data Preview -->
+            <h4 style="color: #555; margin-bottom: 15px;">
+                Preview Data <span class="row-count-badge">10 baris pertama</span>
+            </h4>
+            <div class="data-preview-container">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -593,6 +729,98 @@
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+
+            <!-- Scatter Plots -->
+            {% if chart_data %}
+            <h4 style="color: #555; margin-top: 25px; margin-bottom: 15px;">📈 Scatter Plot: Hubungan Variabel X dengan Y</h4>
+            <div class="charts-container">
+                {% for x_name, chart in chart_data.items() %}
+                <div class="chart-box">
+                    <h4>{{ chart.x_name }} vs {{ chart.y_name }}</h4>
+                    <div class="chart-canvas">
+                        <canvas id="chart-{{ loop.index }}"></canvas>
+                    </div>
+                    {% set corr = chart.correlation %}
+                    {% if corr|abs >= 0.7 %}
+                    <div style="text-align: center;">
+                        <span class="correlation-badge correlation-high">
+                            Korelasi: {{ "%.4f"|format(corr) }} (Kuat)
+                        </span>
+                    </div>
+                    {% elif corr|abs >= 0.4 %}
+                    <div style="text-align: center;">
+                        <span class="correlation-badge correlation-medium">
+                            Korelasi: {{ "%.4f"|format(corr) }} (Sedang)
+                        </span>
+                    </div>
+                    {% else %}
+                    <div style="text-align: center;">
+                        <span class="correlation-badge correlation-low">
+                            Korelasi: {{ "%.4f"|format(corr) }} (Lemah)
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <script>
+                // Render charts
+                {% for x_name, chart in chart_data.items() %}
+                (function() {
+                    const ctx{{ loop.index }} = document.getElementById('chart-{{ loop.index }}').getContext('2d');
+                    new Chart(ctx{{ loop.index }}, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: '{{ chart.x_name }} vs {{ chart.y_name }}',
+                                data: [
+                                    {% for point in chart.data %}
+                                    {x: {{ point[0] }}, y: {{ point[1] }} },
+                                    {% endfor %}
+                                ],
+                                backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                                borderColor: 'rgba(102, 126, 234, 1)',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                pointHoverRadius: 7
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: '{{ chart.x_name }}'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: '{{ chart.y_name }}'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return 'X: ' + context.parsed.x.toFixed(2) + ', Y: ' + context.parsed.y.toFixed(2);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })();
+                {% endfor %}
+            </script>
             {% endif %}
         </div>
 
